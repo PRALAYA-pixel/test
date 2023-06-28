@@ -1,0 +1,43 @@
+select * from 
+      (select min(RSTRCTN_GRP_ID || '|' || RSTRCTN_SUB_GRP_ID) as GROUPS, CHAR_ABR_CNT , A.CNTNT_RSTRCTN , filter ,CNT , sub_bi            ----to fetch grp_id ,sub_grp_id etc
+                        from( select A.RSTRCTN_GRP_ID, A.RSTRCTN_SUB_GRP_ID, A.CNTNT_RSTRCTN, COUNT(DISTINCT A.DIM_CHR_ABR  ) AS CHAR_ABR_CNT,
+                COUNT(DISTINCT A.DIM_CHR_ABR ,A.CNTNT_RSTRCTN ) AS CNT, 
+                  listagg(concat(A.DIM_CHR_ABR, ',', A.DIM_CHR_VL), '|')  WITHIN GROUP(ORDER BY A.DIM_CHR_ABR, A.DIM_CHR_VL) filter ,D.SUB_BLD_INSTR_NM as sub_bi
+                          FROM  V_EX_BLD_INSTR_CNTNT_RSTRCTN A 
+                                LEFT JOIN 
+                                    V_EX_BLD_INSTR_CHR B 
+                                LEFT JOIN V_EX_BLD_INSTR_DB_CNTNT_RSTN C
+                         INNER JOIN  CS_OD_DATA_PROC_GB_PG_UAT.CMN_REF.SUB_BLD_INSTR_MAPPING D
+                                ON 
+                                    A.BLD_INSTR_NM = B.BLD_INSTR_NM
+                                    AND B.BLD_INSTR_NM = C.BLD_INSTR_NM AND A.RSTRCTN_GRP_ID = C.RSTRCTN_GRP_ID
+                                AND A.DIM_CHR_ABR  = B.DIM_CHR_ABR 
+                                 AND C.DB_NM=D.DB_NM
+                                WHERE 
+                                    A.BLD_INSTR_NM       = 'CSSYNDPRDC' 
+                                AND A.SUB_DIM_ABR        = 'PRDC'
+                                --and A.CNTNT_RSTRCTN_TYP  = 1
+                                AND B.DIM_ABR            = 'PRDC' 
+                                AND D.CYCLE_DATE = TO_DATE('20230603','YYYYMMDD')
+                                 group by A.RSTRCTN_GRP_ID, A.RSTRCTN_SUB_GRP_ID, A.CNTNT_RSTRCTN , D.SUB_BLD_INSTR_NM )   A
+                   group by A.filter, A.CNTNT_RSTRCTN, A.CHAR_ABR_CNT ,CNT,sub_bi
+                    order by sub_bi,GROUPS)  T1
+                                          LEFT JOIN 
+                                                    (  SELECT SUB_BLD_INSTR_NM,LISTAGG(distinct DT_SRC_DTL_NM, ',') as DT_SRC,   -----to fetch db_list and char_abr correspond to sub_bi
+                     LISTAGG(distinct b.db_nm, ',') as DB_LIST, LISTAGG( distinct b.DIM_CHR_ABR, ',') as CHAR_ABR,
+                     LISTAGG( distinct d.CNTNT_RSTRCTN_TYP, ',') as CNTNT_RSTRCTN_TYP
+                     FROM (select distinct DATA_SRC_NM, CHARS
+                     from CS_OD_DATA_PROC_GB_PG_UAT.PRDC_REF.CSSYNDPRDC_INTRMD_TBL_PRDC) a INNER JOIN
+                     V_EX_BLD_INSTR_DB_CHR b INNER JOIN
+                     CS_OD_DATA_PROC_GB_PG_UAT.CMN_REF.SUB_BLD_INSTR_MAPPING c INNER JOIN
+                     CS_OD_PROC_INSTR_GB_PG_UAT.CS_OD_BLD_PROC_INSTR.V_EX_BLD_INSTR_DB_CNTNT_RSTN d
+                     where (a.CHARS = b.DIM_CHR_ABR and a.DATA_SRC_NM = b.DT_SRC_DTL_NM)
+                     and c.db_nm = b.db_nm
+                     and b.BLD_INSTR_NM = c.BLD_INSTR_NM
+                     and c.BLD_INSTR_NM = d.BLD_INSTR_NM
+                     and b.BLD_INSTR_NM = 'CSSYNDPRDC'
+                     and d.SUB_DIM_ABR ='PRDC'
+                     AND C.CYCLE_DATE = TO_DATE('20230603','YYYYMMDD')
+                     -- NO DB_NM PASSED. OMITTING DB_NM FILTER 
+                     group by b.BLD_INSTR_NM, sub_BLD_INSTR_NM order by 2) T2 ON
+                     T1.sub_bi=T2.SUB_BLD_INSTR_NM
